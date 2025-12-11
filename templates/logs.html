@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Prediction Logs</title>
+  <style>
+    body { font-family: Arial; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      font-size: 14px;
+    }
+    th {
+      background: #f4f4f4;
+      text-align: left;
+      font-weight: bold;
+    }
+    tr:nth-child(even) { background: #fafafa; }
+    tr:hover { background: #e9f3ff; }
+    .btn { padding: 8px 12px; background:#2b7cff; color:white; border-radius:5px; text-decoration:none; }
+  </style>
+</head>
+<body>
+
+  <h2>Prediction Logs</h2>
+
+  <a class="btn" href="/">⟵ Back to Home</a>
+
+  {% if logs|length == 0 %}
+    <p>No logs found.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr>
+          {% for key in logs[0].keys() %}
+            <th>{{ key }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for row in logs %}
+          <tr>
+            {% for val in row.values() %}
+              <td>{{ val }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+</body>
+</html>

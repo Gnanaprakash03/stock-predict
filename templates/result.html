@@ -1,0 +1,149 @@
+<!-- templates/result.html (full file) -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Result — Stock Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; padding: 16px; }
+    .wrap { max-width:1100px; margin:0 auto; }
+    .panel { border:1px solid #eee; padding:12px; border-radius:8px; margin-bottom:12px; }
+    .summary { display:flex; gap:20px; align-items:center; justify-content:space-between; }
+    .card { padding:10px; border-radius:8px; background:#fafafa; border:1px solid #eee; }
+    .trend-up { color:green; font-weight:700; }
+    .trend-down { color:darkred; font-weight:700; }
+    .btn { padding:8px 12px; background:#2b7cff; color:#fff; border:none; border-radius:6px; cursor:pointer; text-decoration:none; }
+    pre.explain { background:#f3f3f3; padding:10px; border-radius:6px; white-space: pre-wrap;   /* wraps long lines */
+    word-break: break-word;  /* breaks long words if needed */
+    overflow-wrap: break-word; }
+    .final-up { font-size:18px; color:green; font-weight:900; }
+    .final-down { font-size:18px; color:darkred; font-weight:900; }
+    .final-neutral { font-size:18px; color:gray; font-weight:800; }
+    .plot-container { width: 100%; max-width: 100%; }
+    .plotly-graph-div { width: 100% !important; height: 700px !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Stock Prediction Result</h2>
+    {% if error %}
+      <div class="panel"><strong>Error:</strong> {{ error }}</div>
+      <a class="btn" href="{{ url_for('index') }}">Back</a>
+    {% else %}
+      <div class="panel summary">
+        <div>
+          <div><strong>Ticker:</strong> {{ summary.ticker }}</div>
+          <div><strong>Last close:</strong> {{ summary.last_close }}</div>
+          <div><strong>Data range:</strong> {{ summary.start }} → {{ summary.end }} ({{ summary.n_points }} rows)</div>
+        </div>
+        <div style="text-align:right">
+          <a class="btn" href="{{ url_for('index') }}">Predict Another</a>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; align-items:flex-start;">
+        <div style="flex:1">
+          <div class="panel">
+            <!-- Plotly chart HTML fragment -->
+            {{ fig_html | safe }}
+          </div>
+        </div>
+
+        <div style="width:380px">
+          <div class="panel card">
+            <h3>Trend Summary</h3>
+            <div>
+              <div><strong>Trend:</strong>
+                {% if summary.trend_label == "UP" %}
+                  <span class="trend-up">UP</span>
+                {% elif summary.trend_label == "DOWN" %}
+                  <span class="trend-down">DOWN</span>
+                {% else %}
+                  <span>NEUTRAL</span>
+                {% endif %}
+              </div>
+              <div><strong>Trend score:</strong> {{ summary.trend_score }}</div>
+              <div><strong>MA10 slope:</strong> {{ summary.ma_slope }}</div>
+              <div><strong>RSI:</strong> {{ summary.rsi }}</div>
+            </div>
+            <hr/>
+            <div><strong>Why:</strong></div>
+            <pre class="explain">{{ summary.explain }}</pre>
+          </div>
+
+          <div class="panel card" style="margin-top:12px;">
+            <h3>ML Summary</h3>
+            <div><strong>Model prob_up (next-day >+1%):</strong>
+              {% if summary.prob_up is not none %}
+                {{ summary.prob_up | round(3) }}
+              {% else %}
+                N/A
+              {% endif %}
+            </div>
+            <div><strong>CV Mean AUC:</strong>
+              {% if summary.mean_auc is not none %}
+                {{ summary.mean_auc | round(3) }}
+              {% else %}
+                N/A
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="panel card" style="margin-top:12px;">
+            <h3>Final Decision (Ensemble)</h3>
+            <div>
+              {% if summary.final_label == "UP" %}
+                <div class="final-up">UP — consider small experiment</div>
+              {% elif summary.final_label == "DOWN" %}
+                <div class="final-down">DOWN — avoid buying</div>
+              {% else %}
+                <div class="final-neutral">NEUTRAL — no clear signal</div>
+              {% endif %}
+            </div>
+            <div style="margin-top:8px;"><strong>Final score:</strong> {{ summary.final_score | round(4) }}</div>
+            <div><strong>Confidence:</strong> {{ (summary.confidence * 100) | round(1) }}%</div>
+            <hr/>
+            <div style="font-size:13px; color:#444;">
+              Combined score = weighted(ML,Rule). Default weights: ML=0.6, Rule=0.4. You can tune these weights later.
+            </div>
+          </div>
+
+          <div class="panel card" style="margin-top:12px;">
+            <strong>Log</strong>
+            <div style="margin-top:8px; font-size:13px; color:#444;">
+              This run has been recorded in logs/logs.csv for later evaluation.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px; color:#666; font-size:14px;">
+        Note: Ensemble combines model probability and rule score. Use logs to evaluate performance before trusting with real money.
+      </div>
+    {% endif %}
+  </div>
+  <script>
+window.addEventListener('load', function() {
+  setTimeout(function() {
+    try {
+      var gd = document.getElementsByClassName('plotly-graph-div')[0];
+      if (gd && window.Plotly && Plotly.Plots) {
+        Plotly.Plots.resize(gd);
+      }
+    } catch(e) { console.warn(e); }
+  }, 50);
+});
+
+window.addEventListener('resize', function() {
+  try {
+    var gd = document.getElementsByClassName('plotly-graph-div')[0];
+    if (gd && window.Plotly && Plotly.Plots) {
+      Plotly.Plots.resize(gd);
+    }
+  } catch(e) {}
+});
+</script>
+
+</body>
+</html>
