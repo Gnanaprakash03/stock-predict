@@ -1,55 +1,214 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Prediction Logs</title>
-  <style>
-    body { font-family: Arial; margin: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      font-size: 14px;
-    }
-    th {
-      background: #f4f4f4;
-      text-align: left;
-      font-weight: bold;
-    }
-    tr:nth-child(even) { background: #fafafa; }
-    tr:hover { background: #e9f3ff; }
-    .btn { padding: 8px 12px; background:#2b7cff; color:white; border-radius:5px; text-decoration:none; }
-  </style>
-</head>
-<body>
+<!-- templates/logs.html -->
+{% extends "base.html" %}
+{% block content %}
 
-  <h2>Prediction Logs</h2>
+<div style="text-align: center; margin-bottom: 30px;">
+  <h1 style="color: #333; font-size: 2.2em; margin-bottom: 10px;">📋 Prediction Logs</h1>
+  <p style="color: #666; font-size: 1.1em;">Review and analyze your historical predictions</p>
+</div>
 
-  <a class="btn" href="/">⟵ Back to Home</a>
+<!-- Filter Card -->
+<div class="card" style="margin-bottom: 25px;">
+  <h3 style="margin-bottom: 20px; color: #333; font-size: 1.3em;">🔍 Filters & Controls</h3>
+  
+  <form id="filterForm" method="get" action="{{ url_for('view_logs') }}">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px;">
+      
+      <div>
+        <label for="ticker">Ticker</label>
+        <input type="text" id="ticker" name="ticker" value="{{ query_args.ticker }}" placeholder="e.g. RELIANCE.NS" />
+      </div>
 
-  {% if logs|length == 0 %}
-    <p>No logs found.</p>
-  {% else %}
+      <div>
+        <label for="date_from">Date From</label>
+        <input type="date" id="date_from" name="date_from" value="{{ query_args.date_from }}" />
+      </div>
+
+      <div>
+        <label for="date_to">Date To</label>
+        <input type="date" id="date_to" name="date_to" value="{{ query_args.date_to }}" />
+      </div>
+
+      <div>
+        <label for="min_conf">Min Confidence</label>
+        <input type="number" id="min_conf" name="min_conf" step="0.01" min="0" max="1" value="{{ query_args.min_conf }}" placeholder="0.5" />
+      </div>
+
+      <div>
+        <label for="per_page">Rows Per Page</label>
+        <select id="per_page" name="per_page">
+          <option value="10" {% if per_page==10 %}selected{% endif %}>10</option>
+          <option value="20" {% if per_page==20 %}selected{% endif %}>20</option>
+          <option value="50" {% if per_page==50 %}selected{% endif %}>50</option>
+          <option value="100" {% if per_page==100 %}selected{% endif %}>100</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="actions" style="margin-top: 20px;">
+      <button type="submit" class="btn-primary">✓ Apply Filters</button>
+      <a href="{{ url_for('view_logs') }}" class="btn-secondary" style="display:inline-block; padding:14px 24px; text-align:center; text-decoration:none; border-radius:8px;">🔄 Clear All</a>
+      <a id="downloadBtn" href="{{ url_for('download_logs') }}?ticker={{ query_args.ticker }}&date_from={{ query_args.date_from }}&date_to={{ query_args.date_to }}&min_conf={{ query_args.min_conf }}" style="display:inline-block; padding:14px 24px; background:#22c55e; color:white; border-radius:8px; text-decoration:none; font-weight:600; text-align:center; box-shadow:0 4px 15px rgba(34,197,94,0.3); transition:all 0.3s ease;">
+        ⬇️ Download CSV
+      </a>
+    </div>
+  </form>
+</div>
+
+<!-- Stats Card -->
+<div class="card" style="margin-bottom: 25px; background: linear-gradient(135deg, #f8f9ff 0%, #e8f4fd 100%); border: 2px solid #667eea;">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+    <div>
+      <span style="font-size: 0.9em; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Total Records</span>
+      <div style="font-size: 2em; font-weight: 700; color: #667eea; margin-top: 5px;">{{ total }}</div>
+    </div>
+    <div style="text-align: right;">
+      <span style="font-size: 0.9em; color: #666; text-transform: uppercase; letter-spacing: 0.5px;">Current Page</span>
+      <div style="font-size: 1.5em; font-weight: 700; color: #333; margin-top: 5px;">{{ page }} <span style="color: #999; font-size: 0.7em;">of</span> {{ total_pages }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Data Table or Empty State -->
+{% if rows|length == 0 %}
+  <div class="alert alert-info" style="text-align: center; padding: 40px;">
+    <div style="font-size: 3em; margin-bottom: 15px;">📭</div>
+    <h3 style="color: #333; margin-bottom: 10px;">No Logs Found</h3>
+    <p style="color: #666;">No prediction logs match your current filters. Try adjusting your search criteria.</p>
+    <a href="{{ url_for('view_logs') }}" style="display:inline-block; margin-top:15px; padding:10px 20px; background:#667eea; color:white; border-radius:6px; text-decoration:none; font-weight:600;">Clear Filters</a>
+  </div>
+{% else %}
+  <div class="card" style="padding: 0; overflow-x: auto;">
     <table>
       <thead>
         <tr>
-          {% for key in logs[0].keys() %}
-            <th>{{ key }}</th>
+          {% for key in rows[0].keys() %}
+            <th style="white-space: nowrap;">{{ key }}</th>
           {% endfor %}
         </tr>
       </thead>
-
       <tbody>
-        {% for row in logs %}
+        {% for row in rows %}
           <tr>
-            {% for val in row.values() %}
-              <td>{{ val }}</td>
-            {% endfor %}
+          {% for val in row.values() %}
+            <td style="white-space: nowrap;">{{ val }}</td>
+          {% endfor %}
           </tr>
         {% endfor %}
       </tbody>
     </table>
-  {% endif %}
+  </div>
 
-</body>
-</html>
+  <!-- Pagination -->
+  <div style="margin-top: 25px; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap;">
+    {% if page > 1 %}
+      <a class="page-link" href="{{ url_for('view_logs') }}?page=1&per_page={{ per_page }}&ticker={{ query_args.ticker }}&date_from={{ query_args.date_from }}&date_to={{ query_args.date_to }}&min_conf={{ query_args.min_conf }}">
+        « First
+      </a>
+      <a class="page-link" href="{{ url_for('view_logs') }}?page={{ page-1 }}&per_page={{ per_page }}&ticker={{ query_args.ticker }}&date_from={{ query_args.date_from }}&date_to={{ query_args.date_to }}&min_conf={{ query_args.min_conf }}">
+        ‹ Prev
+      </a>
+    {% endif %}
+
+    {# Show a few pages around current page #}
+    {% set start_page = page-3 if page-3 > 1 else 1 %}
+    {% set end_page = page+3 if page+3 < total_pages else total_pages %}
+    {% for p in range(start_page, end_page+1) %}
+      <a class="page-link {% if p==page %}active{% endif %}" href="{{ url_for('view_logs') }}?page={{ p }}&per_page={{ per_page }}&ticker={{ query_args.ticker }}&date_from={{ query_args.date_from }}&date_to={{ query_args.date_to }}&min_conf={{ query_args.min_conf }}">
+        {{ p }}
+      </a>
+    {% endfor %}
+
+    {% if page < total_pages %}
+      <a class="page-link" href="{{ url_for('view_logs') }}?page={{ page+1 }}&per_page={{ per_page }}&ticker={{ query_args.ticker }}&date_from={{ query_args.date_from }}&date_to={{ query_args.date_to }}&min_conf={{ query_args.min_conf }}">
+        Next ›
+      </a>
+      <a class="page-link" href="{{ url_for('view_logs') }}?page={{ total_pages }}&per_page={{ per_page }}&ticker={{ query_args.ticker }}&date_from={{ query_args.date_from }}&date_to={{ query_args.date_to }}&min_conf={{ query_args.min_conf }}">
+        Last »
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<!-- Back Button -->
+<div style="text-align: center; margin-top: 30px;">
+  <a href="{{ url_for('index') }}" style="display:inline-block; padding:14px 28px; background:white; color:#667eea; border:2px solid #667eea; border-radius:8px; text-decoration:none; font-weight:600; transition:all 0.3s ease;">
+    ← Back to Dashboard
+  </a>
+</div>
+
+<style>
+  /* Pagination styling */
+  .page-link {
+    padding: 10px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    color: #333;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    background: white;
+  }
+
+  .page-link:hover {
+    background: #f8f9ff;
+    border-color: #667eea;
+    color: #667eea;
+    transform: translateY(-2px);
+  }
+
+  .page-link.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-color: #667eea;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  }
+
+  /* Download button hover */
+  #downloadBtn:hover {
+    background: #16a34a;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5);
+  }
+
+  /* Table responsive adjustments */
+  @media (max-width: 768px) {
+    table {
+      font-size: 0.85em;
+    }
+    
+    th, td {
+      padding: 10px 8px;
+    }
+
+    .page-link {
+      padding: 8px 12px;
+      font-size: 0.9em;
+    }
+  }
+</style>
+
+<script>
+  // Add hover effects to buttons
+  document.addEventListener('DOMContentLoaded', function() {
+    const backBtn = document.querySelector('a[href*="index"]');
+    if (backBtn) {
+      backBtn.addEventListener('mouseenter', function(){
+        this.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        this.style.color = 'white';
+        this.style.transform = 'translateY(-2px)';
+        this.style.boxShadow = '0 6px 20px rgba(102,126,234,0.4)';
+      });
+      backBtn.addEventListener('mouseleave', function(){
+        this.style.background = 'white';
+        this.style.color = '#667eea';
+        this.style.transform = 'translateY(0)';
+        this.style.boxShadow = 'none';
+      });
+    }
+  });
+</script>
+
+{% endblock %}

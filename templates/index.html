@@ -1,137 +1,155 @@
 <!-- templates/index.html -->
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Stock Predictor — Select Ticker</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: Arial, Helvetica, sans-serif; padding: 20px; }
-    .card { max-width:900px; margin:0 auto; padding:20px; border:1px solid #eee; border-radius:8px; }
-    label { display:block; margin-top:10px; font-weight:600; }
-    select,input { padding:8px; font-size:16px; width:100%; margin-top:6px; }
-    .row { display:flex; gap:12px; }
-    .small { width:150px; }
-    .actions { margin-top:12px; }
-    .warning { color:darkorange; font-weight:700; margin-top:6px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>Stock Dashboard</h2>
-    <p>Choose category and ticker. The app will remember your last selection.</p>
+{% extends "base.html" %}
+{% block content %}
 
-    <form id="frm" method="post" action="{{ url_for('predict') }}">
-      <label for="category">Category</label>
-      <select id="category" name="category" required>
-        <option value="">-- Select category --</option>
-        {% for cat in categories.keys() %}
-          <option value="{{cat}}">{{cat}}</option>
-        {% endfor %}
-      </select>
+<div style="text-align: center; margin-bottom: 30px;">
+  <h1 style="color: #333; font-size: 2.2em; margin-bottom: 10px;">📊 Predict Stock Movement</h1>
+  <p style="color: #666; font-size: 1.1em;">Analyze and forecast stock trends with AI-powered predictions</p>
+</div>
 
-      <label for="ticker">Ticker</label>
-      <select id="ticker" name="ticker" required disabled>
-        <option value="">-- Select ticker --</option>
-      </select>
+<div class="card">
+  <h2>Stock Dashboard</h2>
+  <p>Choose category and ticker. The app will remember your last selection.</p>
 
-      <div style="display:flex; gap:10px; margin-top:10px;">
-        <div style="flex:1">
-          <label for="start">Start date (YYYY-MM-DD)</label>
-          <input type="text" id="start" name="start" value="2018-01-01" />
-        </div>
-        <div style="flex:1">
-          <label for="end">End date (leave empty = today)</label>
-          <input type="text" id="end" name="end" placeholder="YYYY-MM-DD or leave blank" />
-        </div>
+  <form id="frm" method="post" action="{{ url_for('predict') }}">
+    <label for="category">Category</label>
+    <select id="category" name="category" required>
+      <option value="">-- Select category --</option>
+      {% for cat in categories.keys() %}
+        <option value="{{cat}}">{{cat}}</option>
+      {% endfor %}
+    </select>
+
+    <label for="ticker">Ticker Symbol</label>
+    <select id="ticker" name="ticker" required disabled>
+      <option value="">-- Select ticker --</option>
+    </select>
+
+    <div style="display:flex; gap:15px; margin-top:10px;">
+      <div style="flex:1">
+        <label for="start">Start Date</label>
+        <input type="text" id="start" name="start" value="2018-01-01" placeholder="YYYY-MM-DD" />
       </div>
-
-      <div class="actions">
-        <button type="submit">Predict & Plot</button>
-        <button type="button" id="resetBtn">Reset last selection</button>
+      <div style="flex:1">
+        <label for="end">End Date (Optional)</label>
+        <input type="text" id="end" name="end" placeholder="YYYY-MM-DD or leave blank" />
       </div>
-    </form>
+    </div>
 
-    <p id="lastUsed" style="margin-top:12px; color:#666;"></p>
+    <div class="actions">
+      <button type="submit">🚀 Predict & Plot</button>
+      <button type="button" id="resetBtn">🔄 Reset Selection</button>
+    </div>
+  </form>
+
+  <div id="lastUsed" style="margin-top:20px; padding:14px 18px; background:#e8f4fd; border-left:4px solid #2196F3; border-radius:8px; color:#1565C0; font-weight:500; display:none;">
   </div>
+</div>
 
-  <script>
-    // categories object from server-side (rendered)
-    const CATEGORIES = {};
-    {% for cat, tickers in categories.items() %}
-      CATEGORIES["{{cat}}"] = [
-        {% for t in tickers %}"{{t}}",{% endfor %}
-      ];
-    {% endfor %}
+<div style="display:flex; justify-content:flex-end; margin-top:20px;">
+  <a href="{{ url_for('view_logs') }}" 
+     style="display:inline-block; padding:12px 24px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:8px; text-decoration:none; font-weight:600; box-shadow:0 4px 15px rgba(102,126,234,0.4); transition:all 0.3s ease;">
+      📋 View All Logs
+  </a>
+</div>
 
-    const catSelect = document.getElementById("category");
-    const tickerSelect = document.getElementById("ticker");
-    const lastUsedLine = document.getElementById("lastUsed");
-    const resetBtn = document.getElementById("resetBtn");
+<script>
+  // categories object from server-side (rendered)
+  const CATEGORIES = {};
+  {% for cat, tickers in categories.items() %}
+    CATEGORIES["{{cat}}"] = [
+      {% for t in tickers %}"{{t}}",{% endfor %}
+    ];
+  {% endfor %}
 
-    // Populate ticker select based on category
-    catSelect.addEventListener("change", function(){
-      const cat = this.value;
-      tickerSelect.innerHTML = '<option value="">-- Select ticker --</option>';
-      if(cat && CATEGORIES[cat]) {
-        CATEGORIES[cat].forEach(t => {
-          const opt = document.createElement("option");
-          opt.value = t; opt.text = t;
-          tickerSelect.appendChild(opt);
-        });
-        tickerSelect.disabled = false;
-      } else {
-        tickerSelect.disabled = true;
-      }
-    });
+  const catSelect = document.getElementById("category");
+  const tickerSelect = document.getElementById("ticker");
+  const lastUsedLine = document.getElementById("lastUsed");
+  const resetBtn = document.getElementById("resetBtn");
 
-    // localStorage for last-used
-    const LAST_KEY = "stock_dashboard_last";
-    function setLastUsed(cat, ticker) {
-      localStorage.setItem(LAST_KEY, JSON.stringify({category:cat, ticker:ticker}));
-    }
-    function clearLastUsed() {
-      localStorage.removeItem(LAST_KEY);
-      lastUsedLine.textContent = "";
-    }
-    function loadLastUsed() {
-      const raw = localStorage.getItem(LAST_KEY);
-      if(!raw) return;
-      try {
-        const o = JSON.parse(raw);
-        if(o && o.category && o.ticker) {
-          // set category and populate tickers
-          catSelect.value = o.category;
-          // trigger change
-          const event = new Event('change');
-          catSelect.dispatchEvent(event);
-          // select ticker after a tiny delay (allow populate)
-          setTimeout(()=> {
-            tickerSelect.value = o.ticker;
-            lastUsedLine.textContent = `Last used: ${o.ticker} (auto-selected)`;
-          }, 50);
-        }
-      } catch(e) { console.warn("last used parse error", e); }
-    }
-
-    // when form submit, store the selection
-    const frm = document.getElementById("frm");
-    frm.addEventListener("submit", function(){
-      const cat = catSelect.value;
-      const t = tickerSelect.value;
-      if(cat && t) setLastUsed(cat, t);
-    });
-
-    // reset button
-    resetBtn.addEventListener("click", function(){
-      clearLastUsed();
-      catSelect.value = "";
-      tickerSelect.innerHTML = '<option value="">-- Select ticker --</option>';
+  // Populate ticker select based on category
+  catSelect.addEventListener("change", function(){
+    const cat = this.value;
+    tickerSelect.innerHTML = '<option value="">-- Select ticker --</option>';
+    if(cat && CATEGORIES[cat]) {
+      CATEGORIES[cat].forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t; opt.text = t;
+        tickerSelect.appendChild(opt);
+      });
+      tickerSelect.disabled = false;
+    } else {
       tickerSelect.disabled = true;
-    });
+    }
+  });
 
-    // init
-    loadLastUsed();
-  </script>
-</body>
-</html>
+  // localStorage for last-used
+  const LAST_KEY = "stock_dashboard_last";
+  
+  function setLastUsed(cat, ticker) {
+    localStorage.setItem(LAST_KEY, JSON.stringify({category:cat, ticker:ticker}));
+  }
+  
+  function clearLastUsed() {
+    localStorage.removeItem(LAST_KEY);
+    lastUsedLine.textContent = "";
+    lastUsedLine.style.display = "none";
+  }
+  
+  function loadLastUsed() {
+    const raw = localStorage.getItem(LAST_KEY);
+    if(!raw) return;
+    try {
+      const o = JSON.parse(raw);
+      if(o && o.category && o.ticker) {
+        // set category and populate tickers
+        catSelect.value = o.category;
+        // trigger change
+        const event = new Event('change');
+        catSelect.dispatchEvent(event);
+        // select ticker after a tiny delay (allow populate)
+        setTimeout(()=> {
+          tickerSelect.value = o.ticker;
+          lastUsedLine.innerHTML = `✓ <strong>Last used:</strong> ${o.ticker} (${o.category}) - Auto-selected`;
+          lastUsedLine.style.display = "block";
+        }, 50);
+      }
+    } catch(e) { 
+      console.warn("last used parse error", e); 
+    }
+  }
+
+  // when form submit, store the selection
+  const frm = document.getElementById("frm");
+  frm.addEventListener("submit", function(){
+    const cat = catSelect.value;
+    const t = tickerSelect.value;
+    if(cat && t) setLastUsed(cat, t);
+  });
+
+  // reset button
+  resetBtn.addEventListener("click", function(){
+    clearLastUsed();
+    catSelect.value = "";
+    tickerSelect.innerHTML = '<option value="">-- Select ticker --</option>';
+    tickerSelect.disabled = true;
+  });
+
+  // Add hover effect to logs link
+  const logsLink = document.querySelector('a[href*="view_logs"]');
+  if(logsLink) {
+    logsLink.addEventListener('mouseenter', function(){
+      this.style.transform = 'translateY(-2px)';
+      this.style.boxShadow = '0 6px 20px rgba(102,126,234,0.6)';
+    });
+    logsLink.addEventListener('mouseleave', function(){
+      this.style.transform = 'translateY(0)';
+      this.style.boxShadow = '0 4px 15px rgba(102,126,234,0.4)';
+    });
+  }
+
+  // init
+  loadLastUsed();
+</script>
+
+{% endblock %}

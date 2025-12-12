@@ -5,6 +5,10 @@ from flask import Flask, render_template, request, redirect, url_for
 from datetime import datetime
 import plotly.graph_objects as go
 import pandas as pd
+import math
+from flask import send_file, Response
+from io import StringIO
+
 
 from model_utils import (
     download_data, add_basic_indicators, trend_rule,
@@ -153,17 +157,154 @@ def predict():
 
 
 
+# ---------- Logs viewer routes (search, pagination, download) ----------
+
+def load_logs_df():
+    """Load logs CSV into a DataFrame, return empty df on error."""
+    try:
+        df = pd.read_csv(LOG_FILE, parse_dates=["date_run"], dayfirst=False)
+    except Exception:
+        # Return empty dataframe with no rows but columns if file missing
+        df = pd.DataFrame()
+    return df
+
 @app.route("/logs")
 def view_logs():
-    try:
-        df = pd.read_csv(LOG_FILE)
-        df = df.fillna("")  # avoid NaN in HTML
-        logs = df.to_dict(orient="records")
-    except Exception as e:
-        logs = []
-        print("Error loading logs:", e)
+    """
+    Logs page with filters and server-side pagination.
+    Query params:
+      page (int) - page number (1-indexed)
+      per_page (int) - rows per page
+      ticker (string) - exact ticker or partial (case-insensitive)
+      date_from (YYYY-MM-DD)
+      date_to (YYYY-MM-DD)
+      min_conf (float) - minimum confidence (0..1)
+    """
+    # Read query params
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 20))
+    ticker_q = request.args.get("ticker", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    min_conf = request.args.get("min_conf", "").strip()
 
-    return render_template("logs.html", logs=logs)
+    df = load_logs_df()
+    total = 0
+    rows = []
+
+    if not df.empty:
+        # Normalize column names if required (strip BOM or spaces)
+        df.columns = [c.strip() for c in df.columns]
+
+        # Filtering
+        if ticker_q:
+            # allow partial case-insensitive match
+            mask = df["ticker"].astype(str).str.contains(ticker_q, case=False, na=False)
+            df = df[mask]
+
+        if date_from:
+            try:
+                df = df[df["date_run"] >= pd.to_datetime(date_from)]
+            except Exception:
+                pass
+        if date_to:
+            try:
+                df = df[df["date_run"] <= pd.to_datetime(date_to)]
+            except Exception:
+                pass
+
+        if min_conf:
+            try:
+                conf_val = float(min_conf)
+                if "confidence" in df.columns:
+                    df = df[df["confidence"].astype(float) >= conf_val]
+            except Exception:
+                pass
+
+        # Sort newest first
+        if "date_run" in df.columns:
+            df = df.sort_values("date_run", ascending=False)
+
+        total = len(df)
+
+        # Pagination
+        start = (page - 1) * per_page
+        end = start + per_page
+        page_df = df.iloc[start:end]
+
+        # Convert to list of dicts for template
+        rows = page_df.fillna("").to_dict(orient="records")
+
+    # Pagination numbers
+    total_pages = math.ceil(total / per_page) if per_page > 0 else 1
+
+    # Preserve current query args in template for pagination links
+    query_args = {
+        "ticker": ticker_q,
+        "date_from": date_from,
+        "date_to": date_to,
+        "min_conf": min_conf,
+        "per_page": per_page
+    }
+
+    return render_template(
+        "logs.html",
+        rows=rows,
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        query_args=query_args,
+    )
+
+@app.route("/logs/download")
+def download_logs():
+    """
+    Download filtered logs as CSV (applies same query params as /logs).
+    Returns a CSV file response.
+    """
+    ticker_q = request.args.get("ticker", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    min_conf = request.args.get("min_conf", "").strip()
+
+    df = load_logs_df()
+    if df.empty:
+        return Response("No logs found", status=404)
+
+    # Apply same filters as view_logs
+    if ticker_q:
+        mask = df["ticker"].astype(str).str.contains(ticker_q, case=False, na=False)
+        df = df[mask]
+    if date_from:
+        try:
+            df = df[df["date_run"] >= pd.to_datetime(date_from)]
+        except Exception:
+            pass
+    if date_to:
+        try:
+            df = df[df["date_run"] <= pd.to_datetime(date_to)]
+        except Exception:
+            pass
+    if min_conf:
+        try:
+            conf_val = float(min_conf)
+            if "confidence" in df.columns:
+                df = df[df["confidence"].astype(float) >= conf_val]
+        except Exception:
+            pass
+
+    # Convert df to CSV in memory
+    csv_buffer = StringIO()
+    df.to_csv(csv_buffer, index=False)
+    csv_buffer.seek(0)
+
+    filename = f"logs_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(
+        csv_buffer.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
 
 
 if __name__ == "__main__":
